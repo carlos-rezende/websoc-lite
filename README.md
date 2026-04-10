@@ -265,6 +265,8 @@ Variáveis úteis:
 | `PANEL_PORT` | Porta publicada do painel no host (padrão `8080`). |
 | `ANOMALY_THRESHOLD` | Limiar para contagem de anomalias no painel (padrão `0.35`). |
 
+**Painel em zero durante o scan:** os cards antigos liam só `report.json`, que só é gravado **ao final** de cada ciclo completo. O painel atual agrega também `realtime.ndjson` (eventos ao vivo). Após atualizar o código, reconstrua a imagem do painel: `docker compose -f docker-compose.full.yml build soc-panel --no-cache && docker compose -f docker-compose.full.yml up -d`.
+
 Execução única (sem loop), por exemplo para teste:
 
 ```bash
