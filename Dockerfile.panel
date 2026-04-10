@@ -1,0 +1,10 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+COPY panel/app.py /app/panel/app.py
+
+ENV PORT=8080
+ENV REPORTS_DIR=/data/reports
+
+EXPOSE 8080
+CMD ["python", "/app/panel/app.py"]

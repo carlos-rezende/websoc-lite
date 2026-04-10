@@ -1,0 +1,39 @@
+# Stack completa: observabilidade contínua + painel web (volume compartilhado em ./reports)
+# Raspberry Pi 5 (ARM64): docker compose -f docker-compose.full.yml up -d --build
+
+services:
+  soc-scanner:
+    build:
+      context: .
+      dockerfile: Dockerfile.scanner
+    container_name: soc-scanner
+    restart: unless-stopped
+    environment:
+      - OUTPUT_DIR=/data/reports
+      - TARGETS_FILE=/data/targets.txt
+      - SCANNER_CONFIG=/app/docker/observability.docker.json
+      - SOC_REPORTS_DIR=/data/reports
+      - REPORTS_DIR=/data/reports
+      # Intervalo entre execuções completas do pipeline (segundos). Use SCAN_ONCE=1 para job único (override no command).
+      - SCANNER_INTERVAL_SECONDS=${SCANNER_INTERVAL_SECONDS:-300}
+    volumes:
+      - ./reports:/data/reports
+      - ./targets.txt:/data/targets.txt:ro
+    # Sem portas expostas: apenas gera relatórios e realtime.ndjson no volume.
+
+  soc-panel:
+    build:
+      context: .
+      dockerfile: Dockerfile.panel
+    container_name: soc-lite-panel
+    restart: unless-stopped
+    depends_on:
+      - soc-scanner
+    ports:
+      - "${PANEL_PORT:-8080}:8080"
+    environment:
+      - PORT=8080
+      - REPORTS_DIR=/data/reports
+      - ANOMALY_THRESHOLD=${ANOMALY_THRESHOLD:-0.35}
+    volumes:
+      - ./reports:/data/reports

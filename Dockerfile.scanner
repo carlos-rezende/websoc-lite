@@ -1,0 +1,27 @@
+# Multi-arch (incl. linux/arm64) — Raspberry Pi 5
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml README.md ./
+COPY scanner ./scanner
+COPY docker/observability.docker.json ./docker/observability.docker.json
+COPY docker/scanner-entrypoint.sh ./docker/scanner-entrypoint.sh
+
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir .
+
+RUN chmod +x /app/docker/scanner-entrypoint.sh
+
+ENV PYTHONUNBUFFERED=1
+ENV OUTPUT_DIR=/data/reports
+ENV TARGETS_FILE=/data/targets.txt
+ENV SCANNER_CONFIG=/app/docker/observability.docker.json
+ENV SOC_REPORTS_DIR=/data/reports
+ENV REPORTS_DIR=/data/reports
+
+ENTRYPOINT ["/app/docker/scanner-entrypoint.sh"]

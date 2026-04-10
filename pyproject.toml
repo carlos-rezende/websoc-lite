@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "security-observability-scanner"
+version = "0.1.0"
+description = "Modular web security observability framework"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "httpx>=0.27.0",
+  "beautifulsoup4>=4.12.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0",
+]
+
+[project.scripts]
+scanner = "scanner.cli.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["scanner*"]

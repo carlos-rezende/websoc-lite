@@ -1,0 +1,10 @@
+{
+  "timeout_seconds": 8,
+  "retries": 2,
+  "max_endpoints_per_target": 40,
+  "stream_logs": true,
+  "enable_experimental_extensions": true,
+  "experimental_extension_plugins": [
+    "scanner.extensions.latency_guard.LatencyGuardExtension"
+  ]
+}
