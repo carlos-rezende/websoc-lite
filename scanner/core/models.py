@@ -21,6 +21,7 @@ class HTTPResult:
     request_fingerprint: str = ""
     response_hash: str = ""
     request_size: int = 0
+    content_type: str = ""
 
     @property
     def size(self) -> int:
@@ -29,7 +30,7 @@ class HTTPResult:
 
 @dataclass(slots=True)
 class DiffSignal:
-    """Structured behavioral signal from baseline vs mutated comparison."""
+    """Structured DiffSignal: status/size/hash, reflection, HTML structure (observability, not exploitation)."""
 
     structural_diff_score: float
     semantic_divergence_score: float
@@ -38,6 +39,9 @@ class DiffSignal:
     size_delta_ratio: float
     baseline_size: int
     mutated_size: int
+    content_hash_divergence_score: float = 0.0
+    reflection_signal_score: float = 0.0
+    html_structural_change_score: float = 0.0
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -48,6 +52,9 @@ class DiffSignal:
             "size_delta_ratio": round(self.size_delta_ratio, 4),
             "baseline_size": self.baseline_size,
             "mutated_size": self.mutated_size,
+            "content_hash_divergence_score": round(self.content_hash_divergence_score, 4),
+            "reflection_signal_score": round(self.reflection_signal_score, 4),
+            "html_structural_change_score": round(self.html_structural_change_score, 4),
         }
 
 
@@ -87,6 +94,28 @@ class BaselineRecord:
 
 
 @dataclass(slots=True)
+class Hypothesis:
+    """Structured research hypothesis — evidence-led, manual validation only."""
+
+    hypothesis_id: str
+    statement: str
+    evidence: list[dict[str, Any]]
+    confidence: float
+    affected_endpoints: list[str]
+    recommended_verification_steps: list[str]
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "hypothesis_id": self.hypothesis_id,
+            "statement": self.statement,
+            "evidence": list(self.evidence),
+            "confidence": round(self.confidence, 4),
+            "affected_endpoints": list(self.affected_endpoints),
+            "recommended_verification_steps": list(self.recommended_verification_steps),
+        }
+
+
+@dataclass(slots=True)
 class EndpointObservation:
     """Per-endpoint observability record for reporting."""
 
@@ -103,6 +132,7 @@ class ScanResult:
     findings: list[Finding] = field(default_factory=list)
     crawled_endpoints: list[str] = field(default_factory=list)
     observations: list[EndpointObservation] = field(default_factory=list)
+    hypotheses: list[Hypothesis] = field(default_factory=list)
     event_timeline: list[dict[str, Any]] = field(default_factory=list)
     started_at: str = field(default_factory=utc_now_iso)
     finished_at: str | None = None

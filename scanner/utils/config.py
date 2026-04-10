@@ -42,6 +42,15 @@ class AppConfig:
         ]
     )
     experimental_extension_plugins: list[str] = field(default_factory=list)
+    # SOC v2
+    soc_v2_event_queue_size: int = 512
+    soc_v2_queue_strategy: str = "block"
+    state_store_enabled: bool = True
+    correlation_enabled: bool = True
+    metrics_file: str | None = "metrics.json"
+    lab_mode: bool = False
+    lab_mutation_rounds: int = 3
+    lab_telemetry_file: str = "lab_telemetry.ndjson"
 
 
 def merge_config_from_file(path: str | None, base: AppConfig) -> AppConfig:

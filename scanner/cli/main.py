@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import logging
 from dataclasses import replace
 from pathlib import Path
@@ -25,6 +26,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-endpoints", type=int, default=80, help="Endpoint cap per target")
     parser.add_argument("--stream-logs", action="store_true", help="Stream pipeline events to logs")
     parser.add_argument("--realtime", action="store_true", help="Alias for --stream-logs (SOC realtime event stream)")
+    parser.add_argument(
+        "--metrics",
+        action="store_true",
+        help="Imprime métricas SOC v2 para stdout e grava metrics.json no output-dir",
+    )
+    parser.add_argument(
+        "--lab-mode",
+        action="store_true",
+        help="Modo laboratório (opt-in): campanha segura por URL, telemetria NDJSON — não executa o pipeline principal",
+    )
     return parser.parse_args()
 
 
@@ -48,6 +59,7 @@ def build_config(args: argparse.Namespace) -> AppConfig:
         debug=args.debug,
         max_endpoints_per_target=args.max_endpoints,
         stream_logs=args.stream_logs or args.realtime,
+        lab_mode=getattr(args, "lab_mode", False),
     )
     base = merge_config_from_file(getattr(args, "config", None), base)
     targets = load_targets(args.url, args.file)
@@ -64,13 +76,29 @@ def build_config(args: argparse.Namespace) -> AppConfig:
     return replace(base, targets=targets)
 
 
+async def _async_main(args: argparse.Namespace) -> list[str]:
+    config = build_config(args)
+    if config.lab_mode:
+        from scanner.extensions.lab.runner import run_lab_mode
+
+        return await run_lab_mode(config)
+
+    runtime = FrameworkRuntime(config)
+    outputs = await runtime.run()
+    if args.metrics:
+        print(json.dumps(runtime.metrics.to_dict(), indent=2))
+        if config.metrics_file:
+            p = Path(config.output_dir) / config.metrics_file
+            runtime.metrics.dump_json(p)
+            logger.info("metrics written path=%s", p)
+    return outputs
+
+
 def main() -> int:
     args = parse_args()
     configure_logging(debug=args.debug)
     try:
-        config = build_config(args)
-        runtime = FrameworkRuntime(config)
-        outputs = asyncio.run(runtime.run())
+        outputs = asyncio.run(_async_main(args))
     except Exception as exc:  # noqa: BLE001
         logger.exception("execution failed error=%s", exc)
         return 1

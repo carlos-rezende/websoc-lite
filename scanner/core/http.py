@@ -102,6 +102,8 @@ class RequestEngine:
                 )
                 text = resp.text
                 elapsed_ms = (time.perf_counter() - started) * 1000
+                raw_ct = resp.headers.get("content-type") or ""
+                ct_fingerprint = raw_ct.split(";")[0].strip().lower() if raw_ct else ""
                 return HTTPResult(
                     url=str(resp.url),
                     method=method_u,
@@ -113,6 +115,7 @@ class RequestEngine:
                     request_fingerprint=fp,
                     response_hash=body_hash_normalized(text),
                     request_size=req_size,
+                    content_type=ct_fingerprint,
                 )
             except Exception as exc:  # noqa: BLE001
                 last_error = str(exc)
@@ -130,4 +133,5 @@ class RequestEngine:
             request_fingerprint=fp,
             response_hash="",
             request_size=req_size,
+            content_type="",
         )

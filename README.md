@@ -302,6 +302,30 @@ docker compose -f docker-compose.full.yml run --rm -e SCAN_ONCE=1 soc-scanner
 
 Configuração Docker do scanner: `docker/observability.docker.json` (sem `output_dir` fixo; o entrypoint usa `--output-dir /data/reports`).
 
+## SOC v2 (observabilidade e escala)
+
+Esta versão adiciona camadas de produção sem alterar o desenho base (pipeline, plugins, NDJSON):
+
+| Componente | Ficheiro | Função |
+|----------|----------|--------|
+| Schema de eventos | `scanner/core/events/schema.py` | Modelo `Event` (UUID, tipo, `severity`, `payload`); validação centralizada. |
+| Backpressure | `scanner/core/backpressure.py` | Fila assíncrona limitada; estratégias `block` ou `drop_new`; métricas de profundidade e latência de despacho. |
+| Estado persistente | `scanner/core/state_store.py` | SQLite (WAL): baselines, fingerprints, histórico de diff e risco; escritas em executor (não bloqueiam o loop). |
+| Correlação | `scanner/core/correlation.py` | Consome anomalias e emite `incident_detected` (picos temporais ou repetição por endpoint). |
+| Sandbox de plugins | `scanner/plugins/sandbox.py` | `PluginExecutionContext` + `run_analyzer_sandboxed` (timeout; falhas isoladas). |
+| Métricas | `scanner/core/metrics.py` | Contadores (`requests_total`, `anomalies_detected`, `events_emitted`, `crawl_depth_max`, …) e export JSON. |
+
+O **EventBus** valida tipos conhecidos e pode usar fila (`soc_v2_event_queue_size` na config) para proteger memória em dispositivos como Raspberry Pi 5.
+
+**Configuração** (`AppConfig` / JSON): `soc_v2_event_queue_size`, `soc_v2_queue_strategy` (`block` para esperar na fila; qualquer outro valor ativa descarte de eventos novos quando a fila enche), `state_store_enabled`, `correlation_enabled`, `metrics_file`.
+
+**CLI:** `python -m scanner.cli.main ... --metrics` imprime métricas e grava `metrics.json` no diretório de saída (quando `metrics_file` está definido).
+
+**Exemplos:**
+
+- Correlação → incidente: `python -m scanner.examples.soc_v2_correlation_demo`
+- Plugin pensado para sandbox (sem imports de stores internos): `scanner/plugins/analyzers/sandbox_example.py` — adicione a classe à lista `analyzer_plugins` na configuração para testar em conjunto com o pipeline.
+
 ## Testes
 
 ```bash

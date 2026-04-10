@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
@@ -25,3 +27,4 @@ class HTMLCrawler(BaseCrawler):
             full = urljoin(target, str(node["href"]).strip())
             if urlparse(full).netloc == target_host:
                 await bus.emit(ON_URL_DISCOVERED, {"url": full, "source": self.name})
+                await asyncio.sleep(0.05)

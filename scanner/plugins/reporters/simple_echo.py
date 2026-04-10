@@ -14,10 +14,19 @@ class SimpleEchoReporter(ReporterPlugin):
 
     name = "plugin.reporter.simple_echo"
 
-    async def emit(self, results: list[ScanResult], output_dir: str, *, timeline: list[dict[str, object]] | None = None) -> str:
+    async def emit(
+        self,
+        results: list[ScanResult],
+        output_dir: str,
+        *,
+        timeline: list[dict[str, object]] | None = None,
+        incidents: list[dict[str, object]] | None = None,
+    ) -> str:
         Path(output_dir).mkdir(parents=True, exist_ok=True)
         marker = Path(output_dir) / "echo_summary.txt"
-        lines = [f"targets={len(results)} timeline_events={len(timeline or [])}"]
+        lines = [
+            f"targets={len(results)} timeline_events={len(timeline or [])} incidents={len(incidents or [])}",
+        ]
         for r in results:
             lines.append(f"{r.target} findings={len(r.findings)} endpoints={len(r.crawled_endpoints)}")
         text = "\n".join(lines) + "\n"

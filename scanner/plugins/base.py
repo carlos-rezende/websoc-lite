@@ -37,8 +37,15 @@ class AnalyzerPlugin(PluginBase, ABC):
 
 class ReporterPlugin(PluginBase, ABC):
     @abstractmethod
-    async def emit(self, results: list[Any], output_dir: str, *, timeline: list[dict[str, Any]] | None = None) -> str:
-        """Persist report; optional event timeline for observability reporting."""
+    async def emit(
+        self,
+        results: list[Any],
+        output_dir: str,
+        *,
+        timeline: list[dict[str, Any]] | None = None,
+        incidents: list[dict[str, Any]] | None = None,
+    ) -> str:
+        """Persist report; timeline e incidentes correlacionados são opcionais."""
 
 
 class MutationPlugin(PluginBase, ABC):

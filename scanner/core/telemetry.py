@@ -53,6 +53,8 @@ class TelemetryEngine:
                     "elapsed_ms": round(result.elapsed_ms, 2),
                     "size": result.size,
                     "hash": result.response_hash,
+                    "content_type_fingerprint": result.content_type,
+                    "headers_snapshot": dict(list(result.headers.items())[:24]),
                     "error": result.error,
                 },
             },

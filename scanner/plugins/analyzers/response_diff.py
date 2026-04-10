@@ -22,7 +22,13 @@ class ResponseDiffAnalyzer(AnalyzerPlugin):
         *,
         risk_assessment: RiskAssessment | None = None,
     ) -> list[Finding]:
-        if not (signal.status_deviation_score > 0 or signal.size_delta_ratio > 0.2 or signal.semantic_divergence_score > 0.25):
+        if not (
+            signal.status_deviation_score > 0
+            or signal.size_delta_ratio > 0.2
+            or signal.semantic_divergence_score > 0.25
+            or signal.content_hash_divergence_score > 0
+            or signal.reflection_signal_score > 0
+        ):
             return []
 
         assessment = risk_assessment or self.risk.assess(signal)
