@@ -255,7 +255,7 @@ export PANEL_PORT=8080
 docker compose -f docker-compose.full.yml up -d --build
 ```
 
-Abrir: `http://<ip-do-raspberry>:8080` (ou a porta definida em `PANEL_PORT`).
+Abrir: `http://<ip-do-raspberry>:8080` (ou a porta definida em `PANEL_PORT`). Evite abrir o painel com **usuário e senha na barra de endereço** (`http://user:pass@host/...`): o navegador bloqueia `fetch` à API; use `http://ip:8080` e autentique por outro meio, ou use a versão atual do painel que monta as URLs da API sem credenciais.
 
 Variáveis úteis:
 

@@ -152,10 +152,15 @@ INDEX_HTML = """<!doctype html>
     function esc(s) {
       return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
+    /** URL sem user:pass (fetch falha se a página foi aberta como http://user:pass@host/...) */
+    function apiUrl(path) {
+      var p = path.charAt(0) === '/' ? path : '/' + path;
+      return location.protocol + '//' + location.host + p;
+    }
     async function refresh() {
       try {
-        const s = await fetch('/api/summary').then(r => r.json());
-        const ev = await fetch('/api/events?limit=180').then(r => r.json());
+        const s = await fetch(apiUrl('/api/summary')).then(r => r.json());
+        const ev = await fetch(apiUrl('/api/events?limit=180')).then(r => r.json());
         document.getElementById('runs').textContent = s.stream_targets ?? 0;
         document.getElementById('obs').textContent = s.stream_endpoints ?? 0;
         document.getElementById('ano').textContent = s.stream_anomalies ?? 0;
