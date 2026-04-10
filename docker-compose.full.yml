@@ -35,5 +35,9 @@ services:
       - PORT=8080
       - REPORTS_DIR=/data/reports
       - ANOMALY_THRESHOLD=${ANOMALY_THRESHOLD:-0.35}
+      - SCANNER_CONTAINER_NAME=soc-scanner
+      - PANEL_CONTROL_TOKEN=${PANEL_CONTROL_TOKEN:-}
     volumes:
       - ./reports:/data/reports
+      # Necessário para os botões Encerrar/Iniciar pesquisa (API Docker via socket)
+      - /var/run/docker.sock:/var/run/docker.sock

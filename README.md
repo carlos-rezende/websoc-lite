@@ -76,7 +76,8 @@ scanner/
 │   ├── sandbox.py
 │   └── latency_guard.py
 panel/
-└── app.py
+├── app.py
+└── docker_api.py
 docker/
 ├── observability.docker.json
 └── scanner-entrypoint.sh
@@ -84,6 +85,9 @@ Dockerfile.panel
 Dockerfile.scanner
 docker-compose.panel.yml
 docker-compose.full.yml
+scripts/
+└── start-websoc.sh
+.env.example
 tests/
 └── test_pipeline.py
 ```
@@ -129,7 +133,10 @@ git clone https://github.com/SEU_USUARIO/SEU_REPO.git
 cd SEU_REPO
 # Edite targets.txt com alvos autorizados; crie reports/ vazio se necessário:
 mkdir -p reports
-docker compose -f docker-compose.full.yml up -d --build
+cp .env.example .env && nano .env   # defina PANEL_CONTROL_TOKEN para os botões do painel
+chmod +x scripts/start-websoc.sh
+./scripts/start-websoc.sh
+# (equivalente: docker compose -f docker-compose.full.yml up -d --build)
 ```
 
 O `.gitignore` do projeto ignora `reports/`, caches Python e venv — relatórios gerados no Pi não entram no Git por acidente. Não commite URLs internas ou credenciais em `targets.txt`; use cópia local ou variáveis de ambiente conforme sua política.
@@ -239,16 +246,29 @@ Abrir no navegador:
 APIs do painel:
 
 - `GET /health`
-- `GET /api/summary`
+- `GET /api/summary` — inclui estado real do container do scanner (socket Docker), último evento NDJSON, progresso
 - `GET /api/events?limit=180`
+- `GET /api/download/report.json` | `report.html` | `realtime.ndjson` — download dos ficheiros em `reports/`
+- `POST /api/control/stop` | `POST /api/control/start` — cabeçalho `X-Control-Token: <PANEL_CONTROL_TOKEN>`
 
-A UI mostra **barra de progresso estimada** (com base no `realtime.ndjson`) e botões que **copiam comandos** para parar/iniciar o scanner no SSH (o container do painel não acessa o Docker por padrão). Personalize os textos com variáveis `PANEL_HINT_STOP`, `PANEL_HINT_START`, `PANEL_HINT_STOP_ALL`.
+A UI inclui **barra de estado**, progresso combinando Docker + stream, **links de download**, **Encerrar/Iniciar pesquisa** (com token) e comandos de recurso (`PANEL_HINT_*`) quando o controlo remoto não está disponível.
 
 ### Stack completa (scanner contínuo + painel)
 
 Orquestra **dois serviços**: `soc-scanner` (loop com intervalo configurável) e `soc-panel`, compartilhando `./reports` como `/data/reports`.
 
 Pré-requisito: arquivo `targets.txt` na raiz do repositório (montado como somente leitura no container).
+
+**Arranque único (recomendado):** `scripts/start-websoc.sh` — faz `docker compose ... up -d --build` e mostra o URL do painel.
+
+```bash
+cp .env.example .env
+# Edite .env: PANEL_CONTROL_TOKEN=uma_senha_forte
+chmod +x scripts/start-websoc.sh
+./scripts/start-websoc.sh
+```
+
+Ou manualmente:
 
 ```bash
 # Intervalo entre rodadas completas (padrão 300 s). Porta do painel opcional via PANEL_PORT.
@@ -259,6 +279,10 @@ docker compose -f docker-compose.full.yml up -d --build
 
 Abrir: `http://<ip-do-raspberry>:8080` (ou a porta definida em `PANEL_PORT`). Evite abrir o painel com **usuário e senha na barra de endereço** (`http://user:pass@host/...`): o navegador bloqueia `fetch` à API; use `http://ip:8080` e autentique por outro meio, ou use a versão atual do painel que monta as URLs da API sem credenciais.
 
+**Painel:** barra de **estado real** (container do scanner via Docker API + último evento do NDJSON), **downloads** de `report.json`, `report.html` e `realtime.ndjson`, botões **Encerrar pesquisa** / **Iniciar pesquisa** (exigem `PANEL_CONTROL_TOKEN` no `.env` e montagem de `/var/run/docker.sock` no serviço `soc-panel`). O token no browser deve coincidir com o do servidor — **não commite o `.env`**.
+
+**Segurança:** montar o socket do Docker no painel dá ao processo do painel capacidade de controlar o daemon; use rede confiável, token forte e firewall.
+
 Variáveis úteis:
 
 | Variável | Função |
@@ -266,6 +290,7 @@ Variáveis úteis:
 | `SCANNER_INTERVAL_SECONDS` | Segundos entre cada execução completa do pipeline (padrão `300`). |
 | `PANEL_PORT` | Porta publicada do painel no host (padrão `8080`). |
 | `ANOMALY_THRESHOLD` | Limiar para contagem de anomalias no painel (padrão `0.35`). |
+| `PANEL_CONTROL_TOKEN` | Segredo para `POST /api/control/stop|start` e botões do painel. |
 
 **Painel em zero durante o scan:** os cards antigos liam só `report.json`, que só é gravado **ao final** de cada ciclo completo. O painel atual agrega também `realtime.ndjson` (eventos ao vivo). Após atualizar o código, reconstrua a imagem do painel: `docker compose -f docker-compose.full.yml build soc-panel --no-cache && docker compose -f docker-compose.full.yml up -d`.
 

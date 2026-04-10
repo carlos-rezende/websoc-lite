@@ -1,10 +1,13 @@
 FROM python:3.11-slim
 
 WORKDIR /app
-COPY panel/app.py /app/panel/app.py
+RUN pip install --no-cache-dir "httpx>=0.27.0"
+
+COPY panel/app.py panel/docker_api.py /app/panel/
 
 ENV PORT=8080
 ENV REPORTS_DIR=/data/reports
+ENV PYTHONUNBUFFERED=1
 
 EXPOSE 8080
 CMD ["python", "/app/panel/app.py"]
