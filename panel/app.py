@@ -63,6 +63,7 @@ def _rollup_stream(path: Path, max_lines: int = 8000) -> dict[str, int | bool]:
             "stream_active": False,
             "stream_lines": 0,
             "stream_targets": 0,
+            "stream_crawl": 0,
             "stream_endpoints": 0,
             "stream_diffs": 0,
             "stream_risk": 0,
@@ -84,12 +85,38 @@ def _rollup_stream(path: Path, max_lines: int = 8000) -> dict[str, int | bool]:
         "stream_active": True,
         "stream_lines": len(lines),
         "stream_targets": len(targets),
+        "stream_crawl": int(evt.get("crawl_started", 0)),
         "stream_endpoints": int(evt.get("endpoint_discovered", 0)),
         "stream_diffs": int(evt.get("diff_computed", 0)),
         "stream_risk": int(evt.get("risk_scored", 0)),
         "stream_anomalies": int(evt.get("anomaly_detected", 0)),
         "stream_reports": int(evt.get("report_generated", 0)),
     }
+
+
+def _progress_estimate(live: dict[str, int | bool], report_ready: bool) -> tuple[int, str, bool]:
+    """Percentual aproximado (0–100), fase legível, se ainda há atividade."""
+    if report_ready:
+        return 100, "Ciclo concluído (relatório disponível)", False
+    if not live.get("stream_active"):
+        return 0, "Aguardando eventos (scanner parado ou NDJSON vazio)", False
+    rep = int(live.get("stream_reports", 0) or 0)
+    diff = int(live.get("stream_diffs", 0) or 0)
+    risk = int(live.get("stream_risk", 0) or 0)
+    ep = int(live.get("stream_endpoints", 0) or 0)
+    crawl = int(live.get("stream_crawl", 0) or 0)
+    if rep > 0:
+        return 97, "Gerando relatórios (JSON/HTML)", True
+    if diff > 0 or risk > 0:
+        step = max(diff, risk)
+        pct = min(92, 22 + min(70, step * 2))
+        return pct, "Pipeline por endpoint (diff / risco)", True
+    if ep > 0:
+        pct = min(28, 8 + min(20, ep // 3))
+        return pct, "Descoberta de endpoints (crawl)", True
+    if crawl > 0:
+        return 12, "Crawl em execução", True
+    return 6, "Alvo carregado / início do ciclo", True
 
 
 def _summary() -> dict:
@@ -106,6 +133,22 @@ def _summary() -> dict:
         obs = run.get("observations", [])
         observations += len(obs)
         anomalies += sum(1 for o in obs if float(o.get("anomaly_score", 0.0)) >= ANOMALY_THRESHOLD)
+    report_ready = bool(runs)
+    pct, phase, busy = _progress_estimate(live, report_ready)
+    hints = {
+        "stop_scanner": os.environ.get(
+            "PANEL_HINT_STOP",
+            "docker compose -f docker-compose.full.yml stop soc-scanner",
+        ),
+        "start_scanner": os.environ.get(
+            "PANEL_HINT_START",
+            "docker compose -f docker-compose.full.yml up -d soc-scanner",
+        ),
+        "stop_all": os.environ.get(
+            "PANEL_HINT_STOP_ALL",
+            "docker compose -f docker-compose.full.yml down",
+        ),
+    }
     return {
         "runs": len(runs),
         "findings": findings,
@@ -113,7 +156,11 @@ def _summary() -> dict:
         "anomalies": anomalies,
         "reports_dir": str(REPORTS_DIR),
         "realtime_file": REALTIME_FILE,
-        "report_ready": bool(runs),
+        "report_ready": report_ready,
+        "progress_pct": pct,
+        "phase_label": phase,
+        "scan_busy": busy,
+        "hints": hints,
         **live,
     }
 
@@ -134,12 +181,36 @@ INDEX_HTML = """<!doctype html>
     .event { border-bottom: 1px solid #1d2a43; padding: 6px 0; }
     .evt { color: #ffd166; }
     .ts { color: #7f8ea6; }
+    .progress-wrap { margin: 12px 0 16px 0; }
+    .progress-meta { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; font-size: 0.85rem; color: #94a3b8; }
+    .progress { height: 12px; background: #1e293b; border-radius: 6px; overflow: hidden; border: 1px solid #334155; }
+    .progress .fill { height: 100%; width: 0%; background: linear-gradient(90deg,#1d4ed8,#38bdf8); transition: width 0.45s ease; border-radius: 6px; }
+    .progress .fill.pulsing { animation: progPulse 1.4s ease-in-out infinite; }
+    @keyframes progPulse { 0%,100% { opacity: 1; filter: brightness(1); } 50% { opacity: 0.85; filter: brightness(1.15); } }
+    .controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; align-items: center; }
+    .controls button { background: #1e3a5f; color: #e2e8f0; border: 1px solid #334155; border-radius: 6px; padding: 8px 12px; cursor: pointer; font-family: inherit; font-size: 0.8rem; }
+    .controls button:hover { background: #2563eb; border-color: #3b82f6; }
+    .controls .note { font-size: 0.75rem; color: #64748b; max-width: 100%; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <h2>SOC Lite Realtime Panel</h2>
     <p id="hint" style="color:#7f8ea6;font-size:0.85rem;margin:0 0 8px 0"></p>
+    <div class="progress-wrap">
+      <div class="progress-meta">
+        <span id="phaseLabel">—</span>
+        <span id="progressPct">0%</span>
+      </div>
+      <div class="progress" id="progressBar"><div class="fill" id="progressFill"></div></div>
+    </div>
+    <div class="controls">
+      <button type="button" id="btnStop" title="Copia comando para o SSH">Parar scanner (copiar comando)</button>
+      <button type="button" id="btnStart" title="Copia comando para o SSH">Iniciar scanner (copiar)</button>
+      <button type="button" id="btnDown" title="Copia comando para o SSH">Parar stack (down)</button>
+      <span class="note" id="copyFeedback"></span>
+    </div>
+    <p class="note" style="margin:0 0 8px 0">O painel não controla o Docker por segurança; use os botões para copiar e colar no terminal do Raspberry.</p>
     <div class="grid">
       <div class="card"><div>Alvos (stream)</div><div class="v" id="runs">0</div></div>
       <div class="card"><div>Endpoints (stream)</div><div class="v" id="obs">0</div></div>
@@ -157,10 +228,33 @@ INDEX_HTML = """<!doctype html>
       var p = path.charAt(0) === '/' ? path : '/' + path;
       return location.protocol + '//' + location.host + p;
     }
+    var lastHints = {};
+    function copyHint(key) {
+      var t = (lastHints && lastHints[key]) ? String(lastHints[key]) : '';
+      if (!t) { document.getElementById('copyFeedback').textContent = 'Sem comando.'; return; }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(t).then(function() {
+          document.getElementById('copyFeedback').textContent = 'Copiado. Cole no SSH na pasta do projeto.';
+          setTimeout(function(){ document.getElementById('copyFeedback').textContent = ''; }, 4000);
+        }).catch(function(){ document.getElementById('copyFeedback').textContent = 'Copie manualmente: ' + t; });
+      } else {
+        document.getElementById('copyFeedback').textContent = t;
+      }
+    }
+    document.getElementById('btnStop').addEventListener('click', function(){ copyHint('stop_scanner'); });
+    document.getElementById('btnStart').addEventListener('click', function(){ copyHint('start_scanner'); });
+    document.getElementById('btnDown').addEventListener('click', function(){ copyHint('stop_all'); });
     async function refresh() {
       try {
         const s = await fetch(apiUrl('/api/summary')).then(r => r.json());
         const ev = await fetch(apiUrl('/api/events?limit=180')).then(r => r.json());
+        lastHints = s.hints || {};
+        var pct = Math.max(0, Math.min(100, parseInt(s.progress_pct, 10) || 0));
+        document.getElementById('progressPct').textContent = pct + '%';
+        document.getElementById('phaseLabel').textContent = s.phase_label || '—';
+        var fill = document.getElementById('progressFill');
+        fill.style.width = pct + '%';
+        fill.className = 'fill' + ((s.scan_busy && pct > 0 && pct < 100) ? ' pulsing' : '');
         document.getElementById('runs').textContent = s.stream_targets ?? 0;
         document.getElementById('obs').textContent = s.stream_endpoints ?? 0;
         document.getElementById('ano').textContent = s.stream_anomalies ?? 0;

@@ -242,6 +242,8 @@ APIs do painel:
 - `GET /api/summary`
 - `GET /api/events?limit=180`
 
+A UI mostra **barra de progresso estimada** (com base no `realtime.ndjson`) e botões que **copiam comandos** para parar/iniciar o scanner no SSH (o container do painel não acessa o Docker por padrão). Personalize os textos com variáveis `PANEL_HINT_STOP`, `PANEL_HINT_START`, `PANEL_HINT_STOP_ALL`.
+
 ### Stack completa (scanner contínuo + painel)
 
 Orquestra **dois serviços**: `soc-scanner` (loop com intervalo configurável) e `soc-panel`, compartilhando `./reports` como `/data/reports`.
